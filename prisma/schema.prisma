@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int      @id @default(autoincrement())
+  email           String   @unique
+  name            String
+  passwordHash    String
+  // SQLite 不支持 enum：role/memberLevel/status 一律 String + TS 联合类型（见 src/lib/core），zod 校验兜底
+  role            String   @default("USER") // "USER" | "ADMIN"
+  memberLevel     String   @default("NONE") // "NONE" | "LV1" | "LV2" | "LV3"
+  totalSpentCents Int      @default(0)
+  createdAt       DateTime @default(now())
+  sessions        Session[]
+  cartItems       CartItem[]
+  orders          Order[]
+}
+
+model Session {
+  id        String   @id // 32 字节随机 hex，即会话令牌
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  products Product[]
+}
+
+model Product {
+  id          Int         @id @default(autoincrement())
+  name        String
+  description String      @default("")
+  price       Int // 单位：分
+  stock       Int         @default(0)
+  image       String? // 相对 URL，正斜杠
+  isActive    Boolean     @default(true) // 软下架
+  categoryId  Int
+  category    Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+
+  @@index([categoryId, isActive])
+}
+
+model CartItem {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId]) // 一人一商品一行，防重复加购
+}
+
+model Order {
+  id              Int         @id @default(autoincrement())
+  orderNo         String      @unique
+  userId          Int
+  user            User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  status          String      @default("PENDING") // "PENDING" | "PAID" | "CANCELLED" | "SHIPPED" | "COMPLETED"
+  totalAmount     Int // 实付（折后），分，下单时快照
+  originalAmount  Int // 原价总额，分，下单时快照
+  discountRate    Int         @default(100) // 会员折扣率：100=原价 98=9.8折 95=9.5折 90=9折
+  receiverName    String
+  receiverPhone   String
+  receiverAddress String
+  createdAt       DateTime    @default(now())
+  paidAt          DateTime?
+  shippedAt       DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  items           OrderItem[]
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+}
+
+model OrderItem {
+  id           Int      @id @default(autoincrement())
+  orderId      Int
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId    Int?
+  product      Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName  String // 快照
+  productImage String? // 快照
+  unitPrice    Int // 快照（原价），分
+  quantity     Int
+
+  @@index([orderId])
+}
