@@ -49,3 +49,15 @@ export function userCanTransition(from: OrderStatus, to: OrderStatus): boolean {
     (from === "SHIPPED" && to === "COMPLETED")
   );
 }
+
+/**
+ * 管理员侧合法流转：发货/退款（仅已支付）、确认收货（仅已发货）。
+ * 比通用 TRANSITIONS 更严：管理员不代用户取消待支付订单（PENDING→CANCELLED 仅用户可做）。
+ * 管理 API（adminTransitionOrder service）与管理 action（shipOrder/refundOrder/adminCompleteOrder）均用此判定，双入口同一策略。
+ */
+export function adminCanTransition(from: OrderStatus, to: OrderStatus): boolean {
+  return (
+    (from === "PAID" && (to === "SHIPPED" || to === "CANCELLED")) ||
+    (from === "SHIPPED" && to === "COMPLETED")
+  );
+}

@@ -4,6 +4,7 @@ import {
   OrderStateError,
   STATUS_LABELS,
   TRANSITIONS,
+  adminCanTransition,
   canTransition,
   nextStatuses,
   transition,
@@ -47,5 +48,25 @@ describe("订单状态机", () => {
     expect(STATUS_LABELS.CANCELLED).toBe("已取消");
     expect(STATUS_LABELS.SHIPPED).toBe("已发货");
     expect(STATUS_LABELS.COMPLETED).toBe("已完成");
+  });
+});
+
+describe("adminCanTransition 管理员流转", () => {
+  it("合法流转：发货/退款/确认收货", () => {
+    expect(adminCanTransition("PAID", "SHIPPED")).toBe(true);
+    expect(adminCanTransition("PAID", "CANCELLED")).toBe(true);
+    expect(adminCanTransition("SHIPPED", "COMPLETED")).toBe(true);
+  });
+
+  it("拒绝用户侧流转（管理员不代用户取消待支付订单）", () => {
+    expect(adminCanTransition("PENDING", "CANCELLED")).toBe(false);
+    expect(adminCanTransition("PENDING", "SHIPPED")).toBe(false);
+    expect(adminCanTransition("PAID", "COMPLETED")).toBe(false);
+    expect(adminCanTransition("SHIPPED", "CANCELLED")).toBe(false);
+  });
+
+  it("终态无任何流转", () => {
+    expect(adminCanTransition("CANCELLED", "PAID")).toBe(false);
+    expect(adminCanTransition("COMPLETED", "CANCELLED")).toBe(false);
   });
 });

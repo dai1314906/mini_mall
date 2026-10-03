@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { cartQuantitySchema } from "@/lib/validations/cart";
-import { clampQuantity } from "@/lib/core/cart-math";
+import { addCartItem, updateCartItemByProduct } from "@/lib/services/cart-service";
 
 export interface CartActionState {
   ok: boolean;
@@ -12,7 +12,7 @@ export interface CartActionState {
   error?: string;
 }
 
-/** 加购：单条 upsert（@@unique 保证一人一商品一行），数量钳制到库存上限 */
+/** 加购：合并已有数量，clamp 模式保持"钳制到库存上限"的站内 UX */
 export async function addToCart(_prev: CartActionState, formData: FormData): Promise<CartActionState> {
   const next = typeof formData.get("next") === "string" ? (formData.get("next") as string) : "/products";
   const user = await requireUser(next);
@@ -24,31 +24,17 @@ export async function addToCart(_prev: CartActionState, formData: FormData): Pro
   if (!parsed.success) return { ok: false, error: "参数不正确" };
   const { productId, quantity } = parsed.data;
 
-  const product = await prisma.product.findUnique({ where: { id: productId } });
-  if (!product || !product.isActive) return { ok: false, error: "商品不存在或已下架" };
-  if (product.stock < 1) return { ok: false, error: "商品已售罄" };
-
-  const existing = await prisma.cartItem.findUnique({
-    where: { userId_productId: { userId: user.id, productId } },
-  });
-  const before = existing?.quantity ?? 0;
-  const newQuantity = clampQuantity(before + quantity, product.stock);
-
-  await prisma.cartItem.upsert({
-    where: { userId_productId: { userId: user.id, productId } },
-    update: { quantity: newQuantity },
-    create: { userId: user.id, productId, quantity: newQuantity },
-  });
-
+  const result = await addCartItem(user.id, productId, quantity, { clamp: true });
+  if (!result.ok) return { ok: false, error: result.error };
   revalidatePath("/cart");
-  const clamped = before + quantity > product.stock;
+
   return {
     ok: true,
-    message: clamped ? `已达库存上限（${product.stock} 件），数量已调整` : "已加入购物车",
+    message: result.clamped ? `已达库存上限（${result.stock} 件），数量已调整` : "已加入购物车",
   };
 }
 
-/** 修改数量（上限库存、下限 1） */
+/** 修改数量（上限库存、下限 1；clamp 模式保持站内 UX） */
 export async function updateCartQuantity(_prev: CartActionState, formData: FormData): Promise<CartActionState> {
   const user = await requireUser("/cart");
   const parsed = cartQuantitySchema.safeParse({
@@ -58,20 +44,13 @@ export async function updateCartQuantity(_prev: CartActionState, formData: FormD
   if (!parsed.success) return { ok: false, error: "参数不正确" };
   const { productId, quantity } = parsed.data;
 
-  // 行归属校验：只允许改自己的购物车行
-  const item = await prisma.cartItem.findFirst({
-    where: { productId, userId: user.id },
-    include: { product: { select: { stock: true } } },
-  });
-  if (!item) return { ok: false, error: "购物车中没有该商品" };
-
-  const newQuantity = clampQuantity(quantity, item.product.stock);
-  await prisma.cartItem.update({ where: { id: item.id }, data: { quantity: newQuantity } });
+  const result = await updateCartItemByProduct(user.id, productId, quantity, { clamp: true });
+  if (!result.ok) return { ok: false, error: result.error };
   revalidatePath("/cart");
 
   return {
     ok: true,
-    message: quantity !== newQuantity ? `已达库存上限（${item.product.stock} 件），数量已调整` : undefined,
+    message: result.clamped ? `已达库存上限（${result.stock} 件），数量已调整` : undefined,
   };
 }
 

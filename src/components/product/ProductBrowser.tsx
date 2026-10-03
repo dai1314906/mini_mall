@@ -90,7 +90,7 @@ export default async function ProductBrowser({
       )}
 
       <Pagination
-        page={result.page}
+        page={Math.min(result.page, result.totalPages)}
         totalPages={result.totalPages}
         basePath={basePath}
         params={{ q: keyword || undefined, category: categorySlug || undefined }}

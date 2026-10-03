@@ -3,7 +3,7 @@ import OrderActionButton from "@/components/order/OrderActionButton";
 import OrderAmounts from "@/components/order/OrderAmounts";
 import OrderItemsTable from "@/components/order/OrderItemsTable";
 import OrderStatusBadge from "@/components/order/OrderStatusBadge";
-import { getOrderDetail } from "@/lib/queries/orders";
+import { getAdminOrderDetail } from "@/lib/queries/orders";
 import { adminCompleteOrder, refundOrder, shipOrder } from "@/lib/actions/admin/orders";
 
 export const metadata = { title: "订单详情" };
@@ -17,7 +17,7 @@ export default async function AdminOrderDetailPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const order = await getOrderDetail(Number(id));
+  const order = await getAdminOrderDetail(Number(id));
   if (!order) notFound();
 
   const banner = sp.shipped === "1"

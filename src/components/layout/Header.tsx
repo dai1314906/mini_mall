@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth/session";
 import { getCartCount } from "@/lib/queries/cart";
 import { levelLabel, type MemberLevel } from "@/lib/core/member";
+import { canAccess } from "@/lib/core/guards";
 import { logout } from "@/lib/actions/auth";
 
 export default async function Header() {
@@ -48,6 +49,14 @@ export default async function Header() {
               <Link href="/orders" className="hover:text-blue-600">
                 我的订单
               </Link>
+              {canAccess(user.role, "ADMIN") && (
+                <Link
+                  href="/admin"
+                  className="rounded border border-blue-600 px-2 py-0.5 text-blue-600 hover:bg-blue-600 hover:text-white"
+                >
+                  后台管理
+                </Link>
+              )}
               <span className="text-gray-700">{user.name}</span>
               <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
                 {levelLabel(user.memberLevel as MemberLevel)}

@@ -1,11 +1,12 @@
 import "server-only";
 
+import { randomBytes } from "node:crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { COOKIE_NAME } from "@/lib/constants";
-import { verifySessionToken } from "@/lib/auth/jwt";
+import { COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "@/lib/constants";
+import { signSessionToken, verifySessionToken } from "@/lib/auth/jwt";
 import { canAccess } from "@/lib/core/guards";
 import type { Role } from "@/lib/core/guards";
 
@@ -56,4 +57,32 @@ export async function requireAdmin(nextPath = "/admin"): Promise<SessionUser> {
     redirect("/");
   }
   return user;
+}
+
+/** 建立 DB session 行并种 cookie（Server Action 与 API route 共用，不含 redirect） */
+export async function setSession(user: { id: number; role: string }): Promise<void> {
+  const sid = randomBytes(32).toString("hex");
+  await prisma.session.create({
+    data: { id: sid, userId: user.id, expiresAt: new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000) },
+  });
+  // 机会式清理该用户过期会话
+  await prisma.session.deleteMany({ where: { userId: user.id, expiresAt: { lt: new Date() } } });
+  const token = await signSessionToken({ sid, role: user.role });
+  (await cookies()).set(COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  });
+}
+
+/** 清除会话：删 DB session 行 + 删 cookie（幂等，不含 redirect） */
+export async function clearSession(): Promise<void> {
+  const token = (await cookies()).get(COOKIE_NAME)?.value;
+  if (token) {
+    const payload = await verifySessionToken(token);
+    if (payload) await prisma.session.deleteMany({ where: { id: payload.sid } });
+  }
+  (await cookies()).delete(COOKIE_NAME);
 }

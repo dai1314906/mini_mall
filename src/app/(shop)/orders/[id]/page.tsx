@@ -5,9 +5,10 @@ import OrderItemsTable from "@/components/order/OrderItemsTable";
 import OrderStatusBadge from "@/components/order/OrderStatusBadge";
 import PayPanel from "@/components/order/PayPanel";
 import { requireUser } from "@/lib/auth/session";
-import { getOrderDetail } from "@/lib/queries/orders";
+import { getOrderDetailForUser } from "@/lib/queries/orders";
 import { cancelOrder, completeOrder } from "@/lib/actions/order";
 import { levelLabel, type MemberLevel } from "@/lib/core/member";
+import { orderIdSchema } from "@/lib/validations/api";
 
 export default async function OrderDetailPage({
   params,
@@ -18,16 +19,23 @@ export default async function OrderDetailPage({
 }) {
   const user = await requireUser("/orders");
   const { id } = await params;
+  const parsed = orderIdSchema.safeParse(id);
+  if (!parsed.success) notFound(); // 非法 id 一律 404，不抛 Prisma 异常
   const sp = await searchParams;
 
-  const order = await getOrderDetail(Number(id));
-  if (!order || order.userId !== user.id) notFound(); // 归属校验：防越权查看他人订单
+  const order = await getOrderDetailForUser(parsed.data, user.id);
+  if (!order) notFound(); // 归属过滤在查询层，非本人/不存在一律 404
+
+  // 查询参数不受信任：level 仅接受合法等级，非法值按未传处理
+  const level = (["NONE", "LV1", "LV2", "LV3"] as const).includes(sp.level as MemberLevel)
+    ? (sp.level as MemberLevel)
+    : null;
 
   const banner = sp.created === "1"
     ? "下单成功！请尽快完成支付。"
     : sp.paid === "1"
-      ? sp.level
-        ? `支付成功！恭喜升级为${levelLabel(sp.level as MemberLevel)}`
+      ? level
+        ? `支付成功！恭喜升级为${levelLabel(level)}`
         : "支付成功！"
       : sp.cancelled === "1"
         ? "订单已取消，库存已回补。"
