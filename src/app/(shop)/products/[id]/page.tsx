@@ -3,10 +3,13 @@ import { notFound } from "next/navigation";
 import AddToCartButton from "@/components/product/AddToCartButton";
 import { getProductDetail } from "@/lib/queries/products";
 import { formatCents } from "@/lib/core/money";
+import { productIdSchema } from "@/lib/validations/api";
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const product = await getProductDetail(Number(id));
+  const parsed = productIdSchema.safeParse(id);
+  if (!parsed.success) notFound();
+  const product = await getProductDetail(parsed.data);
   if (!product) notFound();
 
   return (
@@ -21,7 +24,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       </div>
       <div>
         <p className="text-sm text-gray-500">
-          <Link href={`/products?category=${product.categoryId}`} className="hover:text-blue-600">
+          <Link href={`/products?category=${product.categorySlug}`} className="hover:text-blue-600">
             {product.categoryName}
           </Link>
         </p>

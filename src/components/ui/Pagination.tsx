@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buildQueryHref } from "@/lib/core/query-href";
 
 interface Props {
   page: number;
@@ -10,12 +11,7 @@ interface Props {
 export default function Pagination({ page, totalPages, basePath, params }: Props) {
   if (totalPages <= 1) return null;
 
-  const href = (p: number) => {
-    const sp = new URLSearchParams();
-    for (const [k, v] of Object.entries(params)) if (v) sp.set(k, v);
-    sp.set("page", String(p));
-    return `${basePath}?${sp.toString()}`;
-  };
+  const href = (p: number) => buildQueryHref(basePath, { ...params, page: String(p) });
 
   return (
     <div className="mt-8 flex items-center justify-center gap-3 text-sm">

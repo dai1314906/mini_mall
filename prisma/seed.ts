@@ -46,16 +46,16 @@ async function main() {
   });
   console.log(`账号就绪：admin@minimall.com / admin123，user@minimall.com / user123`);
 
-  // 分类
+  // 分类（slug 用于前台 URL 与公开 API 筛选）
   const categoryDefs = [
-    { name: "数码", bg: "#1d4ed8", fg: "#ffffff" },
-    { name: "服饰", bg: "#be185d", fg: "#ffffff" },
-    { name: "食品", bg: "#b45309", fg: "#ffffff" },
-    { name: "图书", bg: "#047857", fg: "#ffffff" },
+    { name: "数码", slug: "digital", bg: "#1d4ed8", fg: "#ffffff" },
+    { name: "服饰", slug: "fashion", bg: "#be185d", fg: "#ffffff" },
+    { name: "食品", slug: "food", bg: "#b45309", fg: "#ffffff" },
+    { name: "图书", slug: "books", bg: "#047857", fg: "#ffffff" },
   ];
   const categories = new Map<string, number>();
   for (const c of categoryDefs) {
-    const created = await prisma.category.create({ data: { name: c.name } });
+    const created = await prisma.category.create({ data: { name: c.name, slug: c.slug } });
     categories.set(c.name, created.id);
   }
 

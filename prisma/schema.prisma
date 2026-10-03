@@ -35,6 +35,7 @@ model Session {
 model Category {
   id       Int       @id @default(autoincrement())
   name     String    @unique
+  slug     String    @unique // URL 友好标识，前台筛选与公开 API 使用
   products Product[]
 }
 

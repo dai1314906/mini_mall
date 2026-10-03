@@ -5,8 +5,9 @@ import { PAGE_SIZE } from "@/lib/constants";
 
 export interface ProductListFilters {
   page: number;
-  categoryId?: number;
+  categorySlug?: string;
   q?: string;
+  pageSize?: number;
 }
 
 export interface ProductListResult {
@@ -19,20 +20,21 @@ export interface ProductListResult {
     image: string | null;
     categoryId: number;
     categoryName: string;
+    categorySlug: string;
   }[];
   total: number;
   page: number;
   totalPages: number;
 }
 
-/** 前台商品列表：分页 + 分类筛选 + 关键词搜索（仅上架商品） */
+/** 前台商品列表：分页 + 分类（slug）筛选 + 关键词搜索（仅上架商品）。前台页面与公开 API 共用 */
 export async function listProducts(filters: ProductListFilters): Promise<ProductListResult> {
-  const { page, categoryId, q } = filters;
+  const { page, categorySlug, q, pageSize = PAGE_SIZE } = filters;
   const keyword = q?.trim();
 
   const where = {
     isActive: true,
-    ...(categoryId ? { categoryId } : {}),
+    ...(categorySlug ? { category: { slug: categorySlug } } : {}),
     ...(keyword
       ? { OR: [{ name: { contains: keyword } }, { description: { contains: keyword } }] }
       : {}),
@@ -42,10 +44,10 @@ export async function listProducts(filters: ProductListFilters): Promise<Product
     prisma.product.count({ where }),
     prisma.product.findMany({
       where,
-      include: { category: { select: { name: true } } },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      include: { category: { select: { name: true, slug: true } } },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
   ]);
 
@@ -59,10 +61,11 @@ export async function listProducts(filters: ProductListFilters): Promise<Product
       image: p.image,
       categoryId: p.categoryId,
       categoryName: p.category.name,
+      categorySlug: p.category.slug,
     })),
     total,
     page,
-    totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
   };
 }
 
@@ -70,7 +73,7 @@ export async function listProducts(filters: ProductListFilters): Promise<Product
 export async function getProductDetail(id: number) {
   const product = await prisma.product.findFirst({
     where: { id, isActive: true },
-    include: { category: { select: { id: true, name: true } } },
+    include: { category: { select: { id: true, name: true, slug: true } } },
   });
   if (!product) return null;
   return {
@@ -82,10 +85,6 @@ export async function getProductDetail(id: number) {
     image: product.image,
     categoryId: product.categoryId,
     categoryName: product.category.name,
+    categorySlug: product.category.slug,
   };
-}
-
-/** 首页精选：最新上架 8 件 */
-export async function listLatestProducts(limit = 8) {
-  return listProducts({ page: 1 }).then((r) => r.products.slice(0, limit));
 }
